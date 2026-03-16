@@ -187,6 +187,81 @@ assert!(!bst.search(6));     // false
 
 ---
 
+### Graph `src/graph.rs`
+
+An undirected graph using `Rc<RefCell<Node<T>>>` for shared ownership and interior mutability.
+
+```rust
+pub struct Node<T> {
+    pub data: T,
+    pub neighbors: Vec<Rc<RefCell<Node<T>>>>,
+}
+
+pub struct Graph<T> {
+    nodes: Vec<Rc<RefCell<Node<T>>>>,
+}
+```
+
+**Operations:**
+| Method | Description | Complexity |
+|--------|-------------|------------|
+| `add_node(value) -> Rc<RefCell<Node<T>>>` | adds node, returns handle | O(1) |
+| `add_edge(from, to)` | connects two nodes both ways | O(1) |
+| `display()` | prints each node and its neighbors | O(n + e) |
+
+**Rust concepts practiced:**
+- `Rc<RefCell<Node<T>>>` — the classic shared ownership + mutation combo
+- `Rc::clone` — multiple owners pointing to same node
+- `borrow()` and `borrow_mut()` — reading vs mutating through shared ref
+- Why `RefCell` is needed — nodes mutated after creation
+- Why `Rc` is needed — multiple nodes share same neighbor
+- Struct fields `pub` vs struct `pub` — independent visibility decisions
+
+**Why Rc\<RefCell\<Node\>\> is needed:**
+```rust
+// problem 1 — multiple nodes point to same neighbor:
+// A → B
+// C → B    ← B has TWO owners! Box won't work here!
+//            Rc = multiple owners ✅
+
+// problem 2 — adding neighbors AFTER node is created:
+let a = add_node(1); // created
+let b = add_node(2); // created
+add_edge(&a, &b);    // mutating a AFTER creation!
+//                      Rc alone can't mutate!
+//                      RefCell = interior mutability ✅
+```
+
+**How shared ownership looks in memory:**
+```
+add_edge(n1, n2)
+add_edge(n3, n2)  ← n2 shared between n1 AND n3!
+
+graph.nodes ──────────────► [Node(1), Node(2), Node(3)]
+                                  │        ▲        │
+n1.neighbors ─────────────────────┘        │        │
+n3.neighbors ───────────────────────────────────────┘
+                                       same Node(2)!
+                                       ref_count = 4
+```
+
+**Example:**
+```rust
+let mut g = Graph::new();
+let n1 = g.add_node(1);
+let n2 = g.add_node(2);
+let n3 = g.add_node(3);
+g.add_edge(&n1, &n2);
+g.add_edge(&n1, &n3);
+g.add_edge(&n3, &n2);
+g.display();
+// Node 1 → neighbors: 2 3
+// Node 2 → neighbors: 1 3
+// Node 3 → neighbors: 1 2
+```
+
+---
+
 ## Key Rust Concepts Learned
 
 ### Smart Pointers
@@ -199,6 +274,17 @@ assert!(!bst.search(6));     // false
 | `Cell<T>` | interior mutability, Copy types | simple get/set without refs |
 | `RefCell<T>` | interior mutability, any type | need mut ref through shared ref |
 | `Rc<RefCell<T>>` | shared ownership + mutation | multiple owners who can mutate |
+
+### Decision Guide
+
+```
+need heap alloc?               → Box<T>
+multiple readers, one thread?  → Rc<T>
+multiple readers, threads?     → Arc<T>
+mutate Copy type via &self?    → Cell<T>
+mutate any type via &self?     → RefCell<T>
+shared AND mutable?            → Rc<RefCell<T>>
+```
 
 ### Ownership Rules That Came Up
 
@@ -244,14 +330,25 @@ String        →  deref  →  str
 
 Rust auto-derefs for method calls but NOT for pattern matching.
 
----
+### Trait Bounds — Where to Put Them
 
-## Running Tests
+```rust
+// WRONG — bound on struct is too restrictive!
+pub struct Bst<T: Ord> { ... }
 
-```bash
-cargo test                    # run all tests
-cargo test test_stack         # run specific test
-cargo test -- --nocapture     # show println! output
+// RIGHT — bound only where the trait is actually used!
+pub struct Bst<T> { ... }
+impl<T: Ord> Bst<T> { ... }
+```
+
+### Visibility Rules
+
+```rust
+pub struct Node<T> {     // struct visible outside
+    data: T,             // field PRIVATE — only inside module!
+    pub data: T,         // field PUBLIC — visible everywhere!
+}
+// struct pub and field pub are completely independent!
 ```
 
 ---
