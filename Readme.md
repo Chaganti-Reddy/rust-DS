@@ -1,4 +1,4 @@
-# Rust DSA — Learning Rust Through Data Structures
+# Rust DSA
 
 A collection of data structures implemented in Rust while learning the language deeply.
 The goal is not just to implement DSA but to understand **why** Rust works the way it does —
